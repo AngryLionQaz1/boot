@@ -2315,9 +2315,9 @@ swagger:
     key-name: authorization
   docket:
     test:
-      base-package: com.ly.boot.module.test
+      base-package: com.snow.boot.module.test
     user:
-      base-package: com.ly.boot.module.user
+      base-package: com.snow.boot.module.user
 
 
 ####druid 链接池
