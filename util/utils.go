@@ -265,9 +265,11 @@ public class Application {
 func AppInit(n, pn, opn string) (string, string) {
 	return n + "/src/main/java" + pn + "/config/init/AppInit.java", `package ` + opn + `.config.init;
 
-import  ` + opn + `.common.bean.Config;
-import  ` + opn + `.common.pojo.Authority;
-import  ` + opn + `.common.repository.AuthorityRepository;
+import ` + opn + `.common.bean.Config;
+import ` + opn + `.common.pojo.Authority;
+import ` + opn + `.common.repository.AuthorityRepository;
+import ` + opn + `.config.annotation.AuthorityType;
+import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationArguments;
@@ -292,13 +294,10 @@ public class AppInit implements ApplicationRunner {
     @Autowired
     private Config config;
 
-
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        if (config.getAuthorityInit())initData(getUrl());
+        if (config.getAuthorityInit())new Thread(()->initData(getUrl())).run();
     }
-
-
 
     /**
      * 查看数据库中是否存在
@@ -309,21 +308,11 @@ public class AppInit implements ApplicationRunner {
 
      private List<Authority> makeData(List<Map<String,String>> urls){
        return   urls.stream()
-                 .filter(i->!outUrl(i)&&!checkData(i.get("url")))
+                 .filter(Objects::nonNull)
+                 .filter(i->!checkData(i.get("url")))
                  .map(i->makeData(i))
                  .collect(Collectors.toList());
      }
-
-    /**
-     * 去掉url
-     */
-    private boolean outUrl(Map<String,String> map){
-        List<String> uls=Arrays.asList("/swagger-resources/configuration/ui",
-                "/swagger-resources",
-                "/swagger-resources/configuration/security",
-                "/error");
-        return uls.contains(map.get("url"));
-    }
 
     /**
      * 生成数据
@@ -333,6 +322,8 @@ public class AppInit implements ApplicationRunner {
         if (map.containsKey("name"))a.setName(map.get("name"));
         if (map.containsKey("url"))a.setUri(map.get("url"));
         if (map.containsKey("details"))a.setDetails(map.get("details"));
+        if (map.containsKey("typeName"))a.setTypeName(map.get("typeName"));
+        if (map.containsKey("type"))a.setType(Integer.valueOf(map.get("type")));
         return a;
     }
 
@@ -352,37 +343,60 @@ public class AppInit implements ApplicationRunner {
         Map<RequestMappingInfo,HandlerMethod> map = mapping.getHandlerMethods();
         List<Map<String,String>> urlList = new ArrayList<>();
         for (RequestMappingInfo info : map.keySet()){
-            Map<String,String> limitMap = new HashMap<>();
-            //获取url的Set集合，一个方法可能对应多个url
-            Set<String> patterns = info.getPatternsCondition().getPatterns();
-            for (String url : patterns){
-                limitMap.put("url",url);
-            }
-            HandlerMethod hm = map.get(info);
-            Method m = hm.getMethod();
-            ApiOperation apiOperation = m.getAnnotation(ApiOperation.class);
-            Method[] me = {};
-            if(apiOperation!=null) me = apiOperation.annotationType().getDeclaredMethods();
-            for(Method meth : me){
-                try {
-                    if("notes".equals(meth.getName())){
-                        String color = (String) meth.invoke(apiOperation, new  Object[]{});
-                        limitMap.put("details",color);
-                    }
-                    if("value".equals(meth.getName())){
-                        String color = (String) meth.invoke(apiOperation, new  Object[]{});
-                        limitMap.put("name",color);
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-            urlList.add(limitMap);
+            urlList.add(makeAuthority(info,map));
         }
         return urlList;
     }
-}
 
+    /**获取权限信息*/
+    public  Map<String,String> makeAuthority(RequestMappingInfo info,  Map<RequestMappingInfo,HandlerMethod> map){
+        HandlerMethod hm = map.get(info);
+        Method m = hm.getMethod();
+        Integer code=getAuthorityType(m);
+        if (code==config.getAuthorityType())return null;
+        Map<String,String> limitMap = new HashMap<>();
+        //获取url的Set集合，一个方法可能对应多个url
+        Set<String> patterns = info.getPatternsCondition().getPatterns();
+        for (String url : patterns) limitMap.put("url",url);
+        getAuthority(m,limitMap,code);
+        return limitMap;
+    }
+
+    /**获取type类型*/
+    public Integer getAuthorityType(Method m){
+        // 获取方法上的注解
+        AuthorityType authorityType=m.getAnnotation(AuthorityType.class);
+        //获取类上的注解
+        if (authorityType==null)authorityType=m.getDeclaringClass().getAnnotation(AuthorityType.class);
+        if (authorityType==null)return config.getAuthorityType();
+        return authorityType.code();
+    }
+
+    /**获取参数信息*/
+    public void getAuthority(Method m,Map<String,String> limitMap,Integer type){
+        limitMap.put("type",String.valueOf(type));
+        Api api=m.getDeclaringClass().getAnnotation(Api.class);
+        if (api!=null)limitMap.put("typeName",api.tags()[0]);
+        if (api==null)limitMap.put("typeName",config.getAuthorityTypeName());
+        ApiOperation apiOperation = m.getAnnotation(ApiOperation.class);
+        Method[] me = {};
+        if(apiOperation!=null) me = apiOperation.annotationType().getDeclaredMethods();
+        for(Method meth : me){
+            try {
+                if("notes".equals(meth.getName())){
+                    String color = (String) meth.invoke(apiOperation, new  Object[]{});
+                    limitMap.put("details",color);
+                }
+                if("value".equals(meth.getName())){
+                    String color = (String) meth.invoke(apiOperation, new  Object[]{});
+                    limitMap.put("name",color);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
 `
 }
 func JWTToken(n, pn, opn string) (string, string) {
@@ -713,7 +727,7 @@ public class SecurityInterceptor extends HandlerInterceptorAdapter {
     private boolean checkAdmin(List<Role> roles){
         boolean flag=false;
         for (int i=0;i<roles.size();i++){
-            if (config.getAuthorityAdmin().equals(roles.get(i).getName())){
+            if (config.getAuthorityAdmin().equals(roles.get(i).getCode())){
                 flag=true;
                 break;
             }
@@ -1224,6 +1238,24 @@ public class EncryptResponseBodyAdvice implements ResponseBodyAdvice<Object> {
 
     }
 }
+
+`
+}
+
+func AuthorityType(n, pn, opn string) (string, string) {
+	return n + "/src/main/java" + pn + "/config/annotation/AuthorityType.java", `package ` + opn + `.config.annotation;
+import java.lang.annotation.*;
+
+@Target({ElementType.PARAMETER, ElementType.METHOD,ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+public @interface AuthorityType {
+
+
+    int code() default 0;
+
+}
+
 
 `
 }
@@ -1813,24 +1845,27 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 public class Role {
+
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String name;
+    private String code;
     @ManyToMany(targetEntity = User.class,mappedBy = "roles")
     @JSONField(serialize = false)
     private List<User> users;
-    @ManyToMany(cascade=CascadeType.REFRESH,fetch = FetchType.EAGER)
-    @JoinTable(inverseJoinColumns=@JoinColumn(name="authority_id"),
-            joinColumns=@JoinColumn(name="role_id"))
-    @JSONField(serialize = false)
+    @ManyToMany(cascade=CascadeType.REFRESH,fetch = FetchType.LAZY)
+    @JoinTable(inverseJoinColumns=@JoinColumn(name="authority_id"), joinColumns=@JoinColumn(name="role_id"))
     private List<Authority> authorities;
 
 
 
 
 
+
 }
+
 `
 }
 
@@ -1859,6 +1894,10 @@ public class Authority {
     private Long id;
     /**权限名*/
     private String name;
+    /**类别*/
+    private Integer type;
+    /**类别名*/
+    private String typeName;
     /**权限uri*/
     private String uri;
     /**详细描述*/
@@ -1910,17 +1949,16 @@ public class User {
     private String password;
     @JsonFormat(pattern="yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createTime;
-
-    @ManyToMany(targetEntity = Role.class,fetch = FetchType.EAGER)
-    @JoinTable(joinColumns={@JoinColumn(name="user_id")},
-            inverseJoinColumns={@JoinColumn(name="role_id")})
+    @ManyToMany(targetEntity = Role.class,fetch = FetchType.LAZY)
+    @JoinTable(joinColumns={@JoinColumn(name="user_id")}, inverseJoinColumns={@JoinColumn(name="role_id")})
     @JSONField(serialize = false)
     private List<Role> roles=new ArrayList<>();
-
     @Transient
     private String token;
 
-}`
+}
+
+`
 }
 
 func UserMapperA(n, pn, opn string) (string, string) {
@@ -2118,7 +2156,9 @@ public class Config {
     private String authorityAdmin="admin";
     /**权限管理 是否初始化 权限*/
     private Boolean authorityInit=false;
-
+    /**权限类型 默认分类*/
+    private Integer authorityType=0;
+    private String authorityTypeName="测试";
     /**AES加密KEY*/
     private String aesKey="QAZWSXEDCR123456";
     /**字符集*/
@@ -2185,21 +2225,18 @@ func MybatisConfig(n string) (string, string) {
 
 func ApplicationProd(n string) (string, string) {
 
-	return n + "/src/main/resources/config/application-prod.yml", `###mysql配置
+	return n + "/src/main/resources/config/application-prod.yml", `
+###mysql配置
 mysqlPort: 3306
 mysqlHost: 47.92.213.93
 mysqlUserName: root
 mysqlPassword: liaolin2018
 mysqlDriver: com.mysql.jdbc.Driver
-mysqlDateBase: money
+mysqlDateBase: test
 mysqlUrl: jdbc:mysql://${mysqlHost}:${mysqlPort}/${mysqlDateBase}?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8
 
 swagger:
-  base-package: com
-  title: 云币 Api
   enabled: false
-  authorization:
-    key-name: authorization
 
 ####druid 链接池
 spring:
@@ -2256,11 +2293,13 @@ spring:
 mybatis:
   config-location: classpath:mybatis/mybatis-config.xml
   mapper-locations: classpath:mybatis/mapper/*.xml
+
 `
 }
 
 func ApplicationDev(n string) (string, string) {
-	return n + "/src/main/resources/config/application-dev.yml", `###mysql配置
+	return n + "/src/main/resources/config/application-dev.yml", `
+###mysql配置
 mysqlPort: 3306
 mysqlHost: 47.92.213.93
 mysqlUserName: root
@@ -2270,11 +2309,16 @@ mysqlDateBase: test
 mysqlUrl: jdbc:mysql://${mysqlHost}:${mysqlPort}/${mysqlDateBase}?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=GMT%2B8
 
 swagger:
-  base-package: com
-  title: 项目自动部署 Api
   enabled: true
+  title: TEST Api
   authorization:
     key-name: authorization
+  docket:
+    test:
+      base-package: com.ly.boot.module.test
+    user:
+      base-package: com.ly.boot.module.user
+
 
 ####druid 链接池
 spring:
@@ -2331,6 +2375,7 @@ spring:
 mybatis:
   config-location: classpath:mybatis/mybatis-config.xml
   mapper-locations: classpath:mybatis/mapper/*.xml
+
 `
 }
 
@@ -2705,7 +2750,7 @@ func Pom(n, v, opn string) (string, string) {
         <dependency>
             <groupId>com.spring4all</groupId>
             <artifactId>swagger-spring-boot-starter</artifactId>
-            <version>1.7.0.RELEASE</version>
+            <version>1.8.0.RELEASE</version>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>

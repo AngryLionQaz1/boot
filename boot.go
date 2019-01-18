@@ -32,6 +32,7 @@ func initFIle(name, path, opath, v string) {
 	createFile(util.Decrypt(name, path, opath))
 	createFile(util.Encrypt(name, path, opath))
 	createFile(util.SecurityPermission(name, path, opath))
+	createFile(util.AuthorityType(name, path, opath))
 
 	createFile(util.EncryptResponseBodyAdvice(name, path, opath))
 	createFile(util.EncryptRequestBodyAdvice(name, path, opath))
