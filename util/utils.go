@@ -299,8 +299,11 @@ public class AppInit implements ApplicationRunner {
         if (config.getAuthorityInit())new Thread(()->initData(getUrl())).run();
     }
 
+
     /**
      * 查看数据库中是否存在
+     * @param url
+     * @return
      */
      private boolean checkData(String url){
          return authorityRepository.findByUri(url).isPresent();
@@ -316,6 +319,8 @@ public class AppInit implements ApplicationRunner {
 
     /**
      * 生成数据
+     * @param map
+     * @return
      */
     private Authority makeData(Map<String,String> map){
         Authority a=Authority.builder().build();
@@ -326,9 +331,10 @@ public class AppInit implements ApplicationRunner {
         if (map.containsKey("type"))a.setType(Integer.valueOf(map.get("type")));
         return a;
     }
-
+    
     /**
      * 数据库
+     * @param urls
      */
     private void initData(List<Map<String,String>> urls){
         authorityRepository.saveAll(makeData(urls));
@@ -336,6 +342,7 @@ public class AppInit implements ApplicationRunner {
 
     /**
      * 获取url
+     * @return
      */
     private List<Map<String,String>> getUrl(){
         RequestMappingHandlerMapping mapping = applicationContext.getBean(RequestMappingHandlerMapping.class);
@@ -348,7 +355,12 @@ public class AppInit implements ApplicationRunner {
         return urlList;
     }
 
-    /**获取权限信息*/
+    /***
+     * 获取权限信息
+     * @param info
+     * @param map
+     * @return
+     */
     public  Map<String,String> makeAuthority(RequestMappingInfo info,  Map<RequestMappingInfo,HandlerMethod> map){
         HandlerMethod hm = map.get(info);
         Method m = hm.getMethod();
@@ -362,7 +374,11 @@ public class AppInit implements ApplicationRunner {
         return limitMap;
     }
 
-    /**获取type类型*/
+    /**
+     * 获取type类型
+     * @param m
+     * @return
+     */
     public Integer getAuthorityType(Method m){
         // 获取方法上的注解
         AuthorityType authorityType=m.getAnnotation(AuthorityType.class);
@@ -372,7 +388,12 @@ public class AppInit implements ApplicationRunner {
         return authorityType.code();
     }
 
-    /**获取参数信息*/
+    /**
+     * 获取参数信息
+     * @param m
+     * @param limitMap
+     * @param type
+     */
     public void getAuthority(Method m,Map<String,String> limitMap,Integer type){
         limitMap.put("type",String.valueOf(type));
         Api api=m.getDeclaringClass().getAnnotation(Api.class);
@@ -397,6 +418,7 @@ public class AppInit implements ApplicationRunner {
         }
     }
 }
+
 `
 }
 func JWTToken(n, pn, opn string) (string, string) {
@@ -608,13 +630,21 @@ public class WebAppConfigurer implements WebMvcConfigurer {
     }
 
 
-    /**获取路径*/
+    /**
+     * 获取路径
+     * @param str
+     * @return
+     */
     public static String[] path(String str){
         return str.split(",");
     }
 
 
-    /**设置路径*/
+    /**
+     * 设置路径
+     * @param properties
+     * @param http
+     */
     public static void setPath(Config properties, InterceptorRegistration http) {
         String[] addPath=path(properties.getAddPath());
         String[] excludePath=path(properties.getExcludePath());
@@ -756,9 +786,6 @@ public class SecurityInterceptor extends HandlerInterceptorAdapter {
         return flag;
     }
 
-    /**
-     * 返回错误信息
-     */
     public void response(HttpServletResponse response){
         response.setHeader("Cache-Control", "no-store");
         response.setHeader("Pragma", "no-cache");
@@ -854,9 +881,8 @@ public class AuthorizationInterceptor extends HandlerInterceptorAdapter {
 
 
 
-    /**
-     * 返回错误信息
-     */
+    
+    //返回错误信息
     public void response(HttpServletResponse response){
         response.setHeader("Cache-Control", "no-store");
         response.setHeader("Pragma", "no-cache");
@@ -933,7 +959,6 @@ public class CustomCorsConfiguration {
     /***
      * 在spring MVC 中可以配置全局的规则，
      * 也可以使用@CrossOrigin注解进行细粒度的配置。
-     * @return
      */
 
     @Bean
@@ -1285,7 +1310,7 @@ import java.lang.annotation.*;
 /**
  * 加密注解
  * 
- * <p>加了此注解的接口将进行数据加密操作<p>
+ * 加了此注解的接口将进行数据加密操作
  *
  */
 @Target(ElementType.METHOD)
@@ -1306,7 +1331,7 @@ import java.lang.annotation.*;
 /**
  * 解密注解
  * 
- * <p>加了此注解的接口将进行数据解密操作<p>
+ * 加了此注解的接口将进行数据解密操作
  *
  *
  */
@@ -1549,9 +1574,7 @@ public class PathUtils {
 
 
 
-    /***
-     *  路径转换
-     */
+    // 路径转换
     public static String pathToPath(String str){
         String path=null;
         if("\\".equals(File.separator)){
@@ -1589,8 +1612,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -1606,11 +1627,12 @@ import java.util.UUID;
 public class FileUtils {
 
 
-
     /**
      * base64上传文件
-     *
-     *
+     * @param path
+     * @param data
+     * @param type
+     * @return
      */
     public String base64SaveFile(Path path,String data,String type){
         try {
@@ -1631,50 +1653,14 @@ public class FileUtils {
         }
         return null;
     }
+    
 
-
-
-    public String saveFile(String path, MultipartFile file) throws IOException {
-        if (path==null||file.isEmpty()) return null;
-        String root=PathUtils.pathToPath(String.valueOf(path))+dateToString();
-        String fileName = file.getOriginalFilename();
-        //获取文件类型
-        String suffix = fileName.substring(fileName.lastIndexOf(".") + 1);
-        //文件名
-        String key=getUuid()+"."+suffix;
-        if(!Files.exists(FileSystems.getDefault().getPath(root))) Files.createDirectories(FileSystems.getDefault().getPath(root));
-        if (suffix==null)return null;
-        FileOutputStream fos=new FileOutputStream(new File( Paths.get(root).resolve(key).toUri()));
-        FileChannel out=fos.getChannel();
-        InputStream is=file.getInputStream();
-        int capacity = 1024;// 字节
-        ByteBuffer bf = ByteBuffer.allocate(capacity);
-       for (int i=0;i<is.available();i++){
-
-
-
-
-
-
-       }
-
-        return null;
-    }
-
-
-
-
-
-
-    /***
+    /**
      * 保存文件到磁盘
      * @param path
      * @param file
      * @return
-     * @throws IOException
      */
-
-
     public  String saveFile(Path path, MultipartFile file) {
         try {
             if (file.isEmpty()) return null;
@@ -1696,6 +1682,8 @@ public class FileUtils {
 
     /**
      * 获取上传文件类型
+     * @param file
+     * @return
      */
     public  String getFileType(MultipartFile file){
         String[] s = file.getOriginalFilename().split("\\.");
@@ -1719,20 +1707,15 @@ public class FileUtils {
 
 
     /**
-     * date>>string
+     * date string
      * yyyyMMdd
      */
     public static String dateToString(){
         return LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMM"));
 
     }
-
-
-
-
-
+    
 }
-
 `
 }
 
