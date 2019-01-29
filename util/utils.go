@@ -1203,7 +1203,7 @@ class DecryptHttpInputMessage implements HttpInputMessage {
 func EncryptResponseBodyAdvice(n, pn, opn string) (string, string) {
 	return n + "/src/main/java" + pn + "/config/advice/EncryptResponseBodyAdvice.java", `package ` + opn + `.config.advice;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.alibaba.fastjson.JSONObject;
 import ` + opn + `.common.bean.Config;
 import ` + opn + `.common.util.AesEncryptUtils;
 import ` + opn + `.config.annotation.Encrypt;
@@ -1228,7 +1228,7 @@ public class EncryptResponseBodyAdvice implements ResponseBodyAdvice<Object> {
     @Autowired
     private Config config;
     private static ThreadLocal<Boolean> encryptLocal = new ThreadLocal<Boolean>();
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private JSONObject objectMapper = new JSONObject();
 
     @Override
     public boolean supports(MethodParameter methodParameter, Class<? extends HttpMessageConverter<?>> aClass) {
@@ -1249,7 +1249,7 @@ public class EncryptResponseBodyAdvice implements ResponseBodyAdvice<Object> {
         }
         if (encrypt) {
             try {
-                String content = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(o);
+                String content=objectMapper.toJSONString(o);
                 String result =  AesEncryptUtils.aesEncrypt(content, config.getAesKey());
                 long endTime = System.currentTimeMillis();
                 log.debug("Encrypt Time:" + (endTime - startTime));
@@ -1263,7 +1263,6 @@ public class EncryptResponseBodyAdvice implements ResponseBodyAdvice<Object> {
 
     }
 }
-
 `
 }
 
