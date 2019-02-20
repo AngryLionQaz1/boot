@@ -570,6 +570,10 @@ public class JsonConfig {
         FastJsonConfig fastJsonConfig = new FastJsonConfig();
         //格式化
         fastJsonConfig.setSerializerFeatures(SerializerFeature.PrettyFormat);
+       //是否输出值为null的字段,默认为false
+        fastJsonConfig.setSerializerFeatures(SerializerFeature.WriteMapNullValue);
+        //消除对同一对象循环引用的问题，默认为false
+        fastJsonConfig.setSerializerFeatures(SerializerFeature.DisableCircularReferenceDetect);
         //null属性显示
         fastJsonConfig.setSerializerFeatures(SerializerFeature.WriteNullStringAsEmpty);
         fastConverter.setFastJsonConfig(fastJsonConfig);
